@@ -2,7 +2,13 @@
 import logging
 from typing import Any, Callable, Iterable, Dict, Optional, Tuple
 
-from homeassistant.const import STATE_OFF, STATE_ON
+from aiohue.sensors import (
+    GenericSensor,
+    ZGPSwitchSensor,
+    ZLLSwitchSensor,
+)
+
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNKNOWN
 
 REMOTE_MODELS = ("RWL", "ROM", "FOH", "ZGP", "Z3-")
 BINARY_SENSOR_MODELS = ("SML",)
@@ -280,3 +286,32 @@ def parse_hue_api_response(sensors: Iterable[Dict[str, Any]]):
             data_dict[_key].update(parsed_sensor)
 
     return data_dict
+
+
+def sensor_state(sensor: GenericSensor):
+    """Take in the Hue API json response."""
+    if isinstance(sensor, ZLLSwitchSensor):
+        if sensor.buttonevent:
+            press = str(sensor.buttonevent)
+            return str(press)[0] + RWL_RESPONSE_CODES[press[-1]]
+    elif isinstance(sensor, ZGPSwitchSensor):
+        return TAP_BUTTONS.get(sensor.buttonevent)
+    return STATE_UNKNOWN
+
+
+def sensor_attributes(sensor: GenericSensor) -> dict:
+    """Take in the Hue API json response."""
+    attributes = {
+        "model": "RWL",
+        "last_button_event": sensor_state(sensor),
+        "last_updated": sensor.lastupdated.split("T"),
+    }
+    if isinstance(sensor, ZLLSwitchSensor):
+        attributes.update(
+            {
+                "on": sensor.on,
+                "reachable": sensor.reachable,
+                "battery_level": sensor.battery,
+            }
+        )
+    return attributes
